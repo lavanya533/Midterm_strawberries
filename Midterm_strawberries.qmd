@@ -1,0 +1,142 @@
+---
+title: "Midterm Project"
+author: "Lavanya Menon"
+format: pdf
+editor: visual
+excecute:
+    echo: false
+---
+
+# Introduction
+
+This midterm project analyzes strawberry data for **California** and **Florida**. The focus is on:
+
+-   Comparing the usage of three chemical treatments
+-   Examining price and volume patterns across organic, conventional, and processing categories
+-   Understanding how these metrics differ across years and between the two states
+
+All analysis was conducted in R using tidyverse and janitor packages. Although a helper file (`my_functions.R`) was provided, all necessary data cleaning was performed directly within this Quarto file.
+
+```{r}
+#| label 1: load packages
+
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(scales)
+library(stringr)
+library(knitr)
+
+```
+
+```{r}
+#| label 2: Load the strawberry data set
+
+strawberry <- read.csv("strawberries25_v3.csv", stringsAsFactors = FALSE)
+```
+
+```{r}
+#| label 3: Clean names
+
+strawberry <- clean_names(strawberry)
+
+```
+
+```{r}
+#| label 4: Clean data
+
+if ("data_item" %in% names(strawberry)) {
+  strawberry <- strawberry %>%
+  separate_wider_delim(
+    cols = "data_item",
+    delim = " - ",
+    names = c("fruit", "item"),
+    too_few = "align_start"
+  )
+}
+
+```
+
+```{r}
+#| label 5: Filter for California and Florida 
+
+strawberry <- strawberry %>%
+  filter(state %in% c("CALIFORNIA", "FLORIDA"))
+
+
+```
+
+```{r}
+#| label 6: Chemical treatment comparison 
+
+chemicals <- strawberry %>%
+  filter(state %in% c("CALIFORNIA", "FLORIDA")) %>%
+  filter(str_detect(domain_category, "CHEMICAL")) %>%
+  filter(!is.na(value)) %>%
+  filter(!value %in% c("(D)", "(Z)", "(NA)"))
+
+# Check if both states are present
+print(unique(chemicals$state))
+
+```
+
+```{r}
+#| label 7: Clean number values 
+
+chemicals$value <- as.numeric(gsub(",", "", chemicals$value))
+
+chemicals <- chemicals %>%
+  filter(!is.na(value))
+
+
+```
+
+```{r}
+#| label 8: Finding top chemincals within states
+
+
+selected_chems <- c("SULFUR", "CAPTAN", "PYRACLOSTROBIN")
+
+chem_filtered <- chemicals %>%
+  filter(str_detect(domain_category, paste(selected_chems, collapse = "|"))) %>%
+  mutate(item = str_extract(domain_category, "(?<=\\().+?(?=\\s?=)"))
+
+chem_summary <- chem_filtered %>%
+  group_by(state, item) %>%
+  summarise(total_lbs = sum(value, na.rm = TRUE), .groups = "drop")
+
+
+```
+
+```{r}
+#| label 9: Plots 
+
+kable(chem_summary, caption = "Total Pounds of Chemicals Used by State")
+
+ggplot(chem_summary, aes(x = item, y = total_lbs, fill = state)) +
+  geom_col(position = "dodge") +
+  labs(title = "Top 3 Chemical Treatments Compared by State",
+       x = "Chemical", y = "Total Pounds Used") +
+  theme_minimal()
+
+```
+
+The following three chemicals were selected for comparison based on their frequent use in strawberry farming and availability in both California and Florida:
+
+1.  Sulfur (Fungicide)
+2.  Captan (Fungicide)
+3.  Pyraclostrobin (Fungicide)
+
+Descriptions:
+
+\- Sulfur is commonly used as a fungicide and miticide. It is particularly effective for controlling powdery mildew in strawberries. Its use is widespread in California due to the dry climate conditions that promote fungal growth.
+
+\- Captan is a broad-spectrum fungicide used to protect strawberries from mold, rot, and blight. It is favored in humid growing conditions.
+
+\- Pyraclostrobin is a modern fungicide effective against a wide range of fungal diseases. It provides both curative and protective action.
+
+Comparison:
+
+-   California uses significantly more of all three chemicals than Florida, with Sulfur showing the largest disparity.
+-   These differences may be due to climate-related disease pressures, regulatory policies, or production scale.
+-   Florida's comparatively lower usage might reflect different pest profiles or greater reliance on alternative methods.
