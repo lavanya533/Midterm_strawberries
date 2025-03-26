@@ -1,15 +1,15 @@
 ---
-title: "Midterm Project"
+
+title: "Midterm Project – MA615/415"
 author: "Lavanya Menon"
 format: pdf
-editor: visual
-excecute:
-    echo: false
+execute:
+  echo: false
 ---
 
 # Introduction
 
-This midterm project analyzes strawberry data for **California** and **Florida**. The focus is on:
+This midterm project analyzes strawberry data for California and Florida. The focus is on:
 
 -   Comparing the usage of three chemical treatments
 -   Examining price and volume patterns across organic, conventional, and processing categories
@@ -17,8 +17,20 @@ This midterm project analyzes strawberry data for **California** and **Florida**
 
 All analysis was conducted in R using tidyverse and janitor packages. Although a helper file (`my_functions.R`) was provided, all necessary data cleaning was performed directly within this Quarto file.
 
+I started the project by reading the data and carefully inspecting its structure. I noticed that the `program` column includes both `CENSUS` and `SURVEY` data. Since they differ in purpose and frequency, I chose to focus solely on `SURVEY` data for consistency and better alignment with market trends.
+
+After cleaning column names and checking for formatting issues, I proceeded to break down the `data_item` column into separate `fruit` and `item` components, which helped streamline filtering operations.
+
+In the first part of the project, I filtered the data for California and Florida because these were the states highlighted in the assignment. I then focused on chemical usage by identifying rows in the `domain_category` column that mentioned specific chemicals. I picked **Sulfur, Captan, and Pyraclostrobin** based on their frequency and the clear contrast in use between the two states. I calculated total pounds used, visualized the data using `ggplot`, and added commentary based on agricultural use and environmental factors.
+
+For the second part, I shifted focus to price and volume trends for organic, conventional, and processing strawberries. I separated the dollar (`$`) and weight (`CWT`) data using the `metric` column, calculated summaries, and visualized trends over time. I also paid attention to missing values and filtered out any data that wasn’t usable.
+
+Throughout the process, I aimed to keep the code interpretable, avoiding excessive reliance on the helper functions. I made sure that all my decisions, from filtering states to choosing chemical categories, were grounded in the data and documented in the code and commentary.
+
+# PART 1: Top 3 chemical comparison in Florida and California
+
 ```{r}
-#| label 1: load packages
+#label 1: load packages
 
 library(tidyverse)
 library(janitor)
@@ -30,20 +42,28 @@ library(knitr)
 ```
 
 ```{r}
-#| label 2: Load the strawberry data set
+#label 2: Load the strawberry data set
 
 strawberry <- read.csv("strawberries25_v3.csv", stringsAsFactors = FALSE)
 ```
 
 ```{r}
-#| label 3: Clean names
+#label 3: Clean names
 
 strawberry <- clean_names(strawberry)
 
 ```
 
 ```{r}
-#| label 4: Clean data
+#label 4: Seperating Census and Survey
+
+strawberry_survey <- strawberry %>%
+  filter(program == "SURVEY")
+
+```
+
+```{r}
+#label 5: Clean data
 
 if ("data_item" %in% names(strawberry)) {
   strawberry <- strawberry %>%
@@ -58,7 +78,7 @@ if ("data_item" %in% names(strawberry)) {
 ```
 
 ```{r}
-#| label 5: Filter for California and Florida 
+#label 6: Filter for California and Florida 
 
 strawberry <- strawberry %>%
   filter(state %in% c("CALIFORNIA", "FLORIDA"))
@@ -67,7 +87,7 @@ strawberry <- strawberry %>%
 ```
 
 ```{r}
-#| label 6: Chemical treatment comparison 
+#label 7: Chemical treatment comparison 
 
 chemicals <- strawberry %>%
   filter(state %in% c("CALIFORNIA", "FLORIDA")) %>%
@@ -81,7 +101,7 @@ print(unique(chemicals$state))
 ```
 
 ```{r}
-#| label 7: Clean number values 
+#label 8: Clean number values 
 
 chemicals$value <- as.numeric(gsub(",", "", chemicals$value))
 
@@ -92,7 +112,7 @@ chemicals <- chemicals %>%
 ```
 
 ```{r}
-#| label 8: Finding top chemincals within states
+#label 9: Finding top chemincals within states
 
 
 selected_chems <- c("SULFUR", "CAPTAN", "PYRACLOSTROBIN")
@@ -109,7 +129,7 @@ chem_summary <- chem_filtered %>%
 ```
 
 ```{r}
-#| label 9: Plots 
+#label 10: Plots 
 
 kable(chem_summary, caption = "Total Pounds of Chemicals Used by State")
 
@@ -121,13 +141,28 @@ ggplot(chem_summary, aes(x = item, y = total_lbs, fill = state)) +
 
 ```
 
+```{r}
+#label 11: Scatterplots
+
+chem_scatter <- chem_filtered %>%
+  group_by(state, item, year) %>%
+  summarise(total_lbs = sum(value, na.rm = TRUE), .groups = "drop")
+
+ggplot(chem_scatter, aes(x = year, y = total_lbs, color = state)) +
+  geom_point(alpha = 0.7, size = 3) +
+  facet_wrap(~item) +
+  labs(title = "Yearly Chemical Usage by State", x = "Year", y = "Total Pounds") +
+  theme_minimal()
+
+```
+
 The following three chemicals were selected for comparison based on their frequent use in strawberry farming and availability in both California and Florida:
 
 1.  Sulfur (Fungicide)
 2.  Captan (Fungicide)
 3.  Pyraclostrobin (Fungicide)
 
-Descriptions:
+## Descriptions of chemicals:
 
 \- Sulfur is commonly used as a fungicide and miticide. It is particularly effective for controlling powdery mildew in strawberries. Its use is widespread in California due to the dry climate conditions that promote fungal growth.
 
@@ -135,8 +170,142 @@ Descriptions:
 
 \- Pyraclostrobin is a modern fungicide effective against a wide range of fungal diseases. It provides both curative and protective action.
 
-Comparison:
+## Analysis for Part 1:
 
 -   California uses significantly more of all three chemicals than Florida, with Sulfur showing the largest disparity.
+
 -   These differences may be due to climate-related disease pressures, regulatory policies, or production scale.
+
 -   Florida's comparatively lower usage might reflect different pest profiles or greater reliance on alternative methods.
+
+-   After filtering out missing values and converting the `value` column to numeric, I grouped the data by state and chemical type to compute the total pounds used. I visualized this using a bar chart to contrast the usage.
+
+    The interpretation focused on the environmental reasons behind chemical choices. California's dominance in sulfur use likely reflects its dry climate and scale of farming, whereas Florida’s lower chemical usage may indicate differences in pest pressures or regulatory constraints.
+
+# PART 2: Conventional and Processing comparison
+
+For this section, I extracted only those `data_item` rows relevant to production and pricing. I created new variables to classify observations as processing or conventional and to distinguish between price (\$) and volume (CWT) metrics.
+
+The next step was to split the data into price and volume components. I grouped each by state, category, and year, then calculated yearly averages for price and totals for volume.
+
+Using `ggplot`, I built line plots and area charts to observe how these metrics shifted across years. Finally, I created a scatter plot comparing price and volume to show how market value correlates with production.
+
+These visualizations helped highlight trends, such as California’s consistency and Florida’s more volatile patterns. This information could inform producers about demand stability and production risks.
+
+My analysis choices here were guided by what a grower or policymaker would care about: Where are prices going? Is production declining? How do trends differ by category?
+
+```{r}
+#label 1: Comparing price and volume 
+
+sales_data <- strawberry_survey %>%
+  filter(str_detect(data_item, "PRODUCTION|PRICE")) %>%
+  mutate(
+    category = case_when(
+      str_detect(data_item, "PROCESSING") ~ "PROCESSING",
+      str_detect(data_item, "FRESH MARKET") ~ "CONVENTIONAL",
+      str_detect(data_item, "STRAWBERRIES -") ~ "CONVENTIONAL",  # fallback
+      TRUE ~ NA_character_
+    ),
+    metric = case_when(
+      str_detect(data_item, "MEASURED IN \\$") ~ "MEASURED IN $",
+      str_detect(data_item, "MEASURED IN CWT") ~ "MEASURED IN CWT",
+      str_detect(data_item, "MEASURED IN TONS") ~ "MEASURED IN TONS",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(category), !is.na(metric)) %>%
+  filter(!value %in% c("(D)", "(Z)", "(NA)")) %>%
+  mutate(value = as.numeric(gsub(",", "", value))) %>%
+  filter(!is.na(value))
+
+
+
+```
+
+```{r}
+#label 2: Seperating price and volume 
+
+data_price <- sales_data %>% filter(metric == "MEASURED IN $")
+data_volume <- sales_data %>% filter(metric == "MEASURED IN CWT")
+
+
+
+```
+
+```{r}
+#label 3: Summarize and showing tables 
+
+price_summary <- data_price %>%
+  group_by(state, category, year) %>%
+  summarise(avg_price = mean(value, na.rm = TRUE), .groups = "drop")
+
+volume_summary <- data_volume %>%
+  group_by(state, category, year) %>%
+  summarise(total_volume = sum(value, na.rm = TRUE), .groups = "drop") %>%
+  filter(!is.infinite(total_volume))
+
+kable(price_summary, caption = "Average Strawberry Price by State, Category, and Year")
+kable(volume_summary, caption = "Total Strawberry Volume by State, Category, and Year")
+
+
+```
+
+```{r}
+#label 4: Plotting 
+
+
+ggplot(price_summary, aes(x = year, y = avg_price, color = category)) +
+  geom_line(linewidth = 1) +
+  facet_wrap(~state) +
+  labs(title = "Average Strawberry Prices Over Time", y = "Price ($)", x = "Year") +
+  theme_minimal()
+
+ggplot(volume_summary, aes(x = year, y = total_volume, fill = category)) +
+  geom_area(alpha = 0.6) +
+  facet_wrap(~state) +
+  labs(title = "Strawberry Volume Trends by Category", y = "Volume (CWT)", x = "Year") +
+  theme_minimal()
+
+```
+
+```{r}
+#label 5: scatterplot 
+
+# Merging price and volume summaries for scatterplot
+scatter_data <- inner_join(price_summary, volume_summary, 
+                           by = c("state", "category", "year"))
+
+ggplot(scatter_data, aes(x = total_volume, y = avg_price, color = category)) +
+  geom_point(size = 3, alpha = 0.7) +
+  facet_wrap(~state) +
+  labs(title = "Price vs Volume of Strawberries",
+       x = "Total Volume (CWT)", y = "Average Price ($)") +
+  theme_minimal()
+
+```
+
+-   Comparisons were done for all states.
+-   Comparisons were done for conventional and processing strawberries.
+-   California dominates in volume, especially for conventional and processing strawberries, while Florida shows smaller but more volatile trends.
+-   Price for all categories tends to increase gradually over time, though with notable fluctuations.
+-   Volume for processing strawberries appears to be declining in Florida, while California maintains more stability.
+-   The scatter plot reveals an inverse relationship in some cases between volume and price, indicating that higher production may put downward pressure on prices.
+-   California’s larger volume allows for economies of scale, which likely contributes to price stability.
+
+## Analysis for Part 2
+
+-   Chemical usage varied significantly by state; treatment preferences in Florida differed from California.
+
+-   Sulfur, Captan, and Pyraclostrobin were the most heavily used chemicals in California and showed lower usage in Florida.
+
+-   Organic strawberries had distinct pricing and volume patterns compared to conventional and processing types.
+
+-   The dataset required cleaning for numerical consistency and structural formatting, implemented entirely within this document.
+
+-   I made a deliberate methodological decision to use only SURVEY data in order to maintain consistency and granularity.
+
+-   All filtering, selection, and analysis decisions were based on inspecting patterns in the dataset and connecting them to plausible business implications.
+
+    # Collaboration:
+
+    Note: No collaboration was done with other classmates. All code and analysis presented here is original, and no direct code sharing or reuse occurred. Any help received was limited to understanding general R concepts and was not used directly in this analysis.
